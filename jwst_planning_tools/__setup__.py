@@ -12,8 +12,7 @@ setup(
     install_requires=["jwst >= 1.12.5",
                       "astropy",
                       "spectres",
-                      "matplotlib",
-                      "applefy"],
+                      "matplotlib"],
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Science/Research",
