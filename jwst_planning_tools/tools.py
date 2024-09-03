@@ -2,11 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from scipy.ndimage import shift
+import webbpsf
 from matplotlib.collections import PatchCollection
 import pandas as pd
 from astropy.io import fits
 import astropy.units as u
-
+from photutils.aperture import CircularAperture
 #### MRS ###
 
 fov_MRS = {"1": (3.3,3.7), "2":(4.0 , 4.8), "3":(5.6, 6.2)}
@@ -40,7 +41,7 @@ def dither_pattern(ax, center, sign, ch="1", which="4pt", color="C0"):
     w, h = fov_MRS[ch]
 
     d1 = Rectangle(xy=(dither_off[sign][0][0] - w * 0.5 + center[0], dither_off[sign][0][1] - h * 0.5 + center[1]),
-                   width=w, height=h, fill=False, color=color, label=sign)
+                   width=w, height=h, fill=False, color=color, label=f"{which} {sign}")
     d2 = Rectangle(xy=(dither_off[sign][1][0] - w * 0.5 + center[0], dither_off[sign][1][1] - h * 0.5 + center[1]),
                    width=w, height=h, fill=False, color=color)
     d3 = Rectangle(xy=(dither_off[sign][2][0] - w * 0.5 + center[0], dither_off[sign][2][1] - h * 0.5 + center[1]),
@@ -156,34 +157,12 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
 
     names = [system_name+n for n in ["A", "b", "c", "d", "e"][:nplanets + 1]]
 
-    plt.figure()
-
-    plt.scatter(coordinates[0, 0], coordinates[0, 1], s=100, marker="o", color="gold", label=names[0])
-    for i in np.arange(1, nplanets+1):
-        plt.scatter(coordinates[i, 0], coordinates[i, 1], marker="o", color=f"C{i}", label=names[i])
-
-    plt.gca().set_aspect('equal')
-
-    # plt.gca().arrow(2.3, -0.5, northx, northy, head_width=0.1, head_length=0.1, fc='k', ec='k')
-    # plt.gca().arrow(2.3, -0.5, eastx, easty, head_width=0.1, head_length=0.1, fc='k', ec='k')
-    # plt.text(1.6, -0.1, "N")
-    # plt.text(2, -1, "E")
-    dither_pattern(plt.gca(), [0., 0.], sign=sign, ch=band[0], which=which)
-
-    # plt.xlim([-3, 4])
-    # plt.ylim([-2, 6])
-    plt.legend()
-    plt.suptitle(f"V3 PA: {v3pa}")
-    plt.xlabel("MRS alpha [arcsec]")
-    plt.ylabel("MRS beta [arcsec]")
-    plt.show()
-
     if webbpsf_plot:
         simfov = 2*fov_MRS[band[0]][0]
         miri = webbpsf.MIRI()
         miri.image_mask = "MIRI-IFU_3"
         miri.filter = "DSHORT"
-        band = "3A"
+        miri.band = band
         xoff = coordinates[0, 0]
         yoff = coordinates[0, 1]
         miri.options['source_offset_x'] = xoff
@@ -191,53 +170,105 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
         # produce PSF for each object given fluxes in Jy
         starpsf = miri.calc_psf(monochromatic=miri.wavelength, outfile=None, add_distortion=False,
                                 fov_arcsec=simfov)
-
-        miri.options['source_offset_x'] = xoff + np.random.normal(0, 0.1*miri._IFU_pixelscale[f"Ch{band[0]}"][1])
-        miri.options['source_offset_y'] = yoff + np.random.normal(0, 0.1*miri._IFU_pixelscale[f"Ch{band[0]}"][1])
+        system = starpsf[3].data*contrasts[0]  # initialise system with star
+        system += np.random.normal(0, 0.1 * system)
+        # miri.options['source_offset_x'] = xoff + np.random.normal(0, 0.1*miri._IFU_pixelscale[f"Ch{band[0]}"][1])
+        # miri.options['source_offset_y'] = yoff + np.random.normal(0, 0.1*miri._IFU_pixelscale[f"Ch{band[0]}"][1])
         # produce PSF for each object given fluxes in Jy
-        refpsf = miri.calc_psf(monochromatic=miri.wavelength, outfile=None, add_distortion=False,
-                                fov_arcsec=simfov)
+        # refpsf = miri.calc_psf(monochromatic=miri.wavelength, outfile=None, add_distortion=False,
+        #                         fov_arcsec=simfov)
         print("Placing star at ", miri.options['source_offset_x'], miri.options['source_offset_y'])
-        xoff = coordinates[1, 0]
-        yoff = coordinates[1, 1]
-        miri.options['source_offset_x'] = xoff
-        miri.options['source_offset_y'] = yoff
-        print("Placing planet at ", coordinates[1, :])
-        planetpsf = miri.calc_psf(monochromatic=miri.wavelength, outfile=None, add_distortion=False,
-                                fov_arcsec=simfov)
-        # ref_psf = shift(starpsf[3].data, shift=np.random.normal(0, 0.1, size=2))
-        plt.figure()
+        for j in range(nplanets):
+            xoff = coordinates[j+1, 0]
+            yoff = coordinates[j+1, 1]
+            miri.options['source_offset_x'] = xoff
+            miri.options['source_offset_y'] = yoff
+            print("Placing planet at ", coordinates[j+1, :])
+            planetpsf = miri.calc_psf(monochromatic=miri.wavelength, outfile=None, add_distortion=False,
+                                    fov_arcsec=simfov)
+            system += planetpsf[3].data*contrasts[j+1]
 
-        plt.imshow(starpsf[3].data*10000+planetpsf[3].data, origin="lower", cmap="plasma", vmax=1,
+
+        refpsf = shift(starpsf[3].data*contrasts[0], shift=np.random.normal(0, 0.05, size=2))
+
+
+        fig, ax = plt.subplots(1, 3, figsize=(12, 4), sharey=True, squeeze=True)
+
+        ax[0].scatter(coordinates[0, 0], coordinates[0, 1], s=100, marker="o", color="gold", label=names[0])
+        for i in np.arange(1, nplanets + 1):
+            ax[0].scatter(coordinates[i, 0], coordinates[i, 1], marker="o", color=f"C{i}", label=names[i])
+
+        # plt.gca().set_aspect('equal')
+
+        # plt.gca().arrow(2.3, -0.5, northx, northy, head_width=0.1, head_length=0.1, fc='k', ec='k')
+        # plt.gca().arrow(2.3, -0.5, eastx, easty, head_width=0.1, head_length=0.1, fc='k', ec='k')
+        # plt.text(1.6, -0.1, "N")
+        # plt.text(2, -1, "E")
+        dither_pattern(ax[0], [0., 0.], sign=sign, ch=band[0], which=which)
+        ax[0].set_xlim([-simfov/2, simfov/2])
+        ax[0].set_ylim([-simfov/2, simfov/2])
+        ax[0].set_aspect('equal')
+        ax[0].legend()
+        ax[0].set_title(f"Geometry")
+        ax[0].set_xlabel("MRS alpha [arcsec]")
+        ax[0].set_ylabel("MRS beta [arcsec]")
+
+
+        ax[1].imshow(system, origin="lower", cmap="plasma", vmax=0.1,
                    extent=[-simfov/2, simfov/2, -simfov/2, simfov/2])
-        plt.scatter(coordinates[1, 0], coordinates[1, 1], marker="+", color=f"red")
-        dither_pattern(plt.gca(), [0., 0.], sign=sign, ch=band[0], which=which, color="white")
-        plt.gca().set_aspect('equal')
-        plt.suptitle(f"V3 PA: {v3pa} - Science")
-        plt.xlabel("MRS alpha [arcsec]")
-        plt.ylabel("MRS beta [arcsec]")
-        plt.show()
+        for i in np.arange(1, nplanets + 1):
+            ap = CircularAperture((coordinates[i, 0], coordinates[i, 1]), r=0.3)
+            ap.plot(ax[1], color="red")
+            # ax[0].scatter(coordinates[i, 0], coordinates[i, 1], marker="o", color=f"re", label=names[i])
+        dither_pattern(ax[1], [0., 0.], sign=sign, ch=band[0], which=which, color="white")
+        ax[1].set_aspect('equal')
+        ax[1].set_title(f"Science")
+        ax[1].set_xlabel("MRS alpha [arcsec]")
 
-        plt.figure()
 
-        plt.imshow(starpsf[3].data * contrasts[0] + planetpsf[3].data - refpsf[3].data*contrasts[0], origin="lower",
+        ax[2].imshow(system - refpsf, origin="lower",
                    cmap="RdBu_r", vmin=-0.1, vmax=0.1,
                    extent=[-simfov / 2, simfov / 2, -simfov / 2, simfov / 2])
-        plt.scatter(coordinates[1, 0], coordinates[1, 1], marker="+", color=f"red")
-        dither_pattern(plt.gca(), [0., 0.], sign=sign, ch=band[0], which=which, color="white")
+        for i in np.arange(1, nplanets + 1):
+            ap = CircularAperture((coordinates[i, 0], coordinates[i, 1]), r=0.3)
+            ap.plot(ax[2], color="red")
+        dither_pattern(ax[2], [0., 0.], sign=sign, ch=band[0], which=which, color="black")
+        ax[2].set_aspect('equal')
+        ax[2].set_title(f"Residuals")
+        ax[2].set_xlabel("MRS alpha [arcsec]")
+
+        fig.suptitle(f"V3 PA: {v3pa}, wavelength: {miri.wavelength:.1f}")
+        plt.show()
+    else:
+        plt.figure()
+        plt.scatter(coordinates[0, 0], coordinates[0, 1], s=100, marker="o", color="gold", label=names[0])
+        for i in np.arange(1, nplanets + 1):
+            plt.scatter(coordinates[i, 0], coordinates[i, 1], marker="o", color=f"C{i}", label=names[i])
+
         plt.gca().set_aspect('equal')
-        plt.suptitle(f"V3 PA: {v3pa} - Residuals")
+
+        # plt.gca().arrow(2.3, -0.5, northx, northy, head_width=0.1, head_length=0.1, fc='k', ec='k')
+        # plt.gca().arrow(2.3, -0.5, eastx, easty, head_width=0.1, head_length=0.1, fc='k', ec='k')
+        # plt.text(1.6, -0.1, "N")
+        # plt.text(2, -1, "E")
+        dither_pattern(plt.gca(), [0., 0.], sign=sign, ch=band[0], which=which)
+
+        # plt.xlim([-3, 4])
+        # plt.ylim([-2, 6])
+        plt.legend()
+        plt.suptitle(f"V3 PA: {v3pa}")
         plt.xlabel("MRS alpha [arcsec]")
         plt.ylabel("MRS beta [arcsec]")
         plt.show()
+
 
 if __name__=="__main__":
 
-    import sys
+    # import sys
 
-    sys.path.append("/Users/polychronispatapis/Documents/PhD/MIRI/MRS_PSF/paper_analysis/")
-    from optimise_cube_webbpsf import *
+    # sys.path.append("/Users/polychronispatapis/Documents/PhD/MIRI/MRS_PSF/paper_analysis/")
+    # from optimise_cube_webbpsf import *
 
 
-    simulate_geometry(planets=[(4.1, 37.4, 6*1e-3)], v3pa=60, band="3A",
-                      which="4pt", sign="neg", offset=None, system_name="Tatooine-", primary=1, webbpsf_plot=True)
+    simulate_geometry(planets=[(1.2, 30, 1e-2)], v3pa=10, band="1A", offset=(0., -0.),
+                      which="4pt", sign="neg", system_name="Tatooine-", primary=1, webbpsf_plot=True)
