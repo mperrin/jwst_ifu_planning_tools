@@ -263,12 +263,5 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
 
 
 if __name__=="__main__":
-
-    # import sys
-
-    # sys.path.append("/Users/polychronispatapis/Documents/PhD/MIRI/MRS_PSF/paper_analysis/")
-    # from optimise_cube_webbpsf import *
-
-
     simulate_geometry(planets=[(1.2, 30, 1e-2)], v3pa=10, band="1A", offset=(0., -0.),
                       which="4pt", sign="neg", system_name="Tatooine-", primary=1, webbpsf_plot=True)
