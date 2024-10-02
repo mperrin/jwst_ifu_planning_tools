@@ -318,27 +318,4 @@ def mrs_planning_tool(planets, target_name, band="1A", primary=0, which="4pt", s
 
 
 
-if __name__=="__main__":
-    # simulate_geometry(planets=[(1.7, 72, 1e-4), (0.96, 344, 1e-4), (0.7, 243, 1e-4)], v3pa=80, band="1A", offset=(0., -0.),
-    #                   which="4pt", sign="ext", system_name="HR8799-", primary=0, webbpsf_plot=True)
-    # mrs_planning_tool(planets=[(2.3, 138, 4e-3)], target_name="DH Tau", band="3B", primary=1, vscale_res=None,
-    #                   jwst_cycle=1)
 
-    # mrs_planning_tool(planets=[(1.71, 212, 4e-2), (3.37, 221, 4e-3)], target_name="TYC 8998-760-1", band="1A", primary=1, vscale_im=0.05,
-    #                   vscale_res=0.01,
-    #                   sign="neg", jwst_cycle=4)
-
-    # mrs_planning_tool(planets=[(2.2, 175, 1*1e-2)], target_name="GSC 6214-210", band="1A", primary=1, vscale_im=0.05,
-    #                   vscale_res=None,
-    #                   sign="neg", jwst_cycle=4)
-
-    # mrs_planning_tool(planets=[(1.72, 72.8, 4e-4), (0.96, 345, 8e-4),  (0.7, 244, 8e-4)], target_name="HR 8799", band="2A",
-    #                   primary=0, vscale_im=0.001,
-    #                   vscale_res=2e-4,
-    #                   sign="ext", jwst_cycle=3)
-
-    mrs_planning_tool(planets=[(0.632, 138, 4e-4)], target_name="HD 95086",
-                      band="1A",
-                      primary=0, vscale_im=0.001,
-                      vscale_res=1e-4,
-                      sign="neg", jwst_cycle=4)
