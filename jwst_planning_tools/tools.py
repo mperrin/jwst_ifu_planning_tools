@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
@@ -8,6 +10,8 @@ import pandas as pd
 from astropy.io import fits
 import astropy.units as u
 from photutils.aperture import CircularAperture
+from jwst_planning_tools.util import get_v3PA_range
+from miricoord.mrs import mrs_tools as mt
 #### MRS ###
 
 fov_MRS = {"1": (3.3,3.7), "2":(4.0 , 4.8), "3":(5.6, 6.2)}
@@ -28,7 +32,8 @@ def pa_to_MRS_pa(pa, v3pa, band):
 
     """
     mrs_rot = {"1": 8.3, "2": 8.2, "3": 7.6, "4": 8.4}  # from Patapis+23
-    north = -(v3pa + 180 + mrs_rot[band[0]])  # the 180 comes from the orientation of alpha/beta with respect to V3
+    ## elisabeth maths
+    north = -(v3pa + 180 - mrs_rot[band[0]])  # the 180 comes from the orientation of alpha/beta with respect to V3
     return north + pa
 
 def albe_to_v2v3(alpha, beta):
@@ -110,7 +115,7 @@ def v2v3_to_XidlYidl(v2, v3):
 
 
 def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name=None, primary=None,
-                      webbpsf_plot=False):
+                      webbpsf_plot=False, vscale_im=None, vscale_res=None):
     """
 
     :param planets: list of tuples with (separation, pa, flux (optional)) for each planet
@@ -157,6 +162,11 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
 
     names = [system_name+n for n in ["A", "b", "c", "d", "e"][:nplanets + 1]]
 
+    if vscale_im is None:
+        vscale_im = 0.1
+    if vscale_res is None:
+        vscale_res = 0.1
+
     if webbpsf_plot:
         simfov = 2*fov_MRS[band[0]][0]
         miri = webbpsf.MIRI()
@@ -189,7 +199,7 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
             system += planetpsf[3].data*contrasts[j+1]
 
 
-        refpsf = shift(starpsf[3].data*contrasts[0], shift=np.random.normal(0, 0.05, size=2))
+        refpsf = shift(starpsf[3].data*contrasts[0], shift=np.random.normal(0, 0.01, size=2))
 
 
         fig, ax = plt.subplots(1, 3, figsize=(12, 4), sharey=True, squeeze=True)
@@ -214,7 +224,7 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
         ax[0].set_ylabel("MRS beta [arcsec]")
 
 
-        ax[1].imshow(system, origin="lower", cmap="plasma", vmax=0.1,
+        ax[1].imshow(system, origin="lower", cmap="plasma", vmax=vscale_im,
                    extent=[-simfov/2, simfov/2, -simfov/2, simfov/2])
         for i in np.arange(1, nplanets + 1):
             ap = CircularAperture((coordinates[i, 0], coordinates[i, 1]), r=0.3)
@@ -227,7 +237,7 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
 
 
         ax[2].imshow(system - refpsf, origin="lower",
-                   cmap="RdBu_r", vmin=-0.1, vmax=0.1,
+                   cmap="RdBu_r", vmin=-vscale_res, vmax=vscale_res,
                    extent=[-simfov / 2, simfov / 2, -simfov / 2, simfov / 2])
         for i in np.arange(1, nplanets + 1):
             ap = CircularAperture((coordinates[i, 0], coordinates[i, 1]), r=0.3)
@@ -240,7 +250,7 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
         fig.suptitle(f"V3 PA: {v3pa}, wavelength: {miri.wavelength:.1f}")
         plt.show()
     else:
-        plt.figure()
+        fig = plt.figure()
         plt.scatter(coordinates[0, 0], coordinates[0, 1], s=100, marker="o", color="gold", label=names[0])
         for i in np.arange(1, nplanets + 1):
             plt.scatter(coordinates[i, 0], coordinates[i, 1], marker="o", color=f"C{i}", label=names[i])
@@ -260,8 +270,75 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
         plt.xlabel("MRS alpha [arcsec]")
         plt.ylabel("MRS beta [arcsec]")
         plt.show()
+    return fig
+
+
+def mrs_planning_tool(planets, target_name, band="1A", primary=0, which="4pt", sign="pos",
+                      ra=None, dec=None, start_time=None, end_time=None, jwst_cycle=4, webbpsf_plot=True,
+                      vscale_im=None, vscale_res=None):
+    # get system V3PA range in given time period of JWST cycle
+    _, _, _, _, V3PA_range = get_v3PA_range(target_name=target_name, ra=ra, dec=dec, start=start_time, end=end_time,
+                                            cycle=jwst_cycle)
+    v3pa_msg = ""
+    for i in range(len(V3PA_range)):
+        v3pa_msg += f"{V3PA_range[0][i]}-{V3PA_range[1][i]}\n"
+
+    while True:
+        # Output the available V3 PA ranges
+        print("The available V3 PA ranges for the target are:")
+        print(v3pa_msg)
+
+        # Take input from the user
+        try:
+            v3_pa = float(input("Enter V3 PA (float): "))
+            offsetx = float(input("Enter offset x (tuple): "))
+            offsety = float(input("Enter offset y (tuple): "))
+        except ValueError:
+            print("Invalid input. Please enter valid float values.")
+            continue  # Loop again if input is invalid
+        offset = (offsetx, offsety)
+        v2off, v3off = mt.abtov2v3(-offsetx, -offsety, channel=band)
+        offsetxyidl = np.round(mt.v2v3_to_xyideal(v2off, v3off), 2)
+        # Perform actions with the inputs (e.g., calculate or process)
+        print(f"You entered V3 PA: {v3_pa} and offset: {offset}")
+        print("Simulating geometry")
+        fig = simulate_geometry(planets=planets, v3pa=v3_pa, band=band, offset=offset,
+                          which=which, sign=sign, system_name=target_name + "-", primary=primary,
+                          webbpsf_plot=webbpsf_plot, vscale_im=vscale_im, vscale_res=vscale_res)
+        # Ask if the user wants to continue
+        saveplot = input("Do you want to save the plot? (y/n): ").lower()
+        if saveplot == 'y':
+            savepath = input("provide path: ").lower()
+            fig.savefig(savepath+f"_{target_name}_{band}_V3_{v3_pa}_offsetXYidl_{offsetxyidl}.png", dpi=300)
+        # Ask if the user wants to continue
+        should_continue = input("Do you want to continue? (y/n): ").lower()
+        if should_continue != 'y':
+            print("Exiting...")
+            break
+
 
 
 if __name__=="__main__":
-    simulate_geometry(planets=[(1.2, 30, 1e-2)], v3pa=10, band="1A", offset=(0., -0.),
-                      which="4pt", sign="neg", system_name="Tatooine-", primary=1, webbpsf_plot=True)
+    # simulate_geometry(planets=[(1.7, 72, 1e-4), (0.96, 344, 1e-4), (0.7, 243, 1e-4)], v3pa=80, band="1A", offset=(0., -0.),
+    #                   which="4pt", sign="ext", system_name="HR8799-", primary=0, webbpsf_plot=True)
+    # mrs_planning_tool(planets=[(2.3, 138, 4e-3)], target_name="DH Tau", band="3B", primary=1, vscale_res=None,
+    #                   jwst_cycle=1)
+
+    # mrs_planning_tool(planets=[(1.71, 212, 4e-2), (3.37, 221, 4e-3)], target_name="TYC 8998-760-1", band="1A", primary=1, vscale_im=0.05,
+    #                   vscale_res=0.01,
+    #                   sign="neg", jwst_cycle=4)
+
+    # mrs_planning_tool(planets=[(2.2, 175, 1*1e-2)], target_name="GSC 6214-210", band="1A", primary=1, vscale_im=0.05,
+    #                   vscale_res=None,
+    #                   sign="neg", jwst_cycle=4)
+
+    # mrs_planning_tool(planets=[(1.72, 72.8, 4e-4), (0.96, 345, 8e-4),  (0.7, 244, 8e-4)], target_name="HR 8799", band="2A",
+    #                   primary=0, vscale_im=0.001,
+    #                   vscale_res=2e-4,
+    #                   sign="ext", jwst_cycle=3)
+
+    mrs_planning_tool(planets=[(0.632, 138, 4e-4)], target_name="HD 95086",
+                      band="1A",
+                      primary=0, vscale_im=0.001,
+                      vscale_res=1e-4,
+                      sign="neg", jwst_cycle=4)
