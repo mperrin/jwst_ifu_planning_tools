@@ -276,6 +276,27 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
 def mrs_planning_tool(planets, target_name, band="1A", primary=0, which="4pt", sign="pos",
                       ra=None, dec=None, start_time=None, end_time=None, jwst_cycle=4, webbpsf_plot=True,
                       vscale_im=None, vscale_res=None):
+    """
+    Command Line Tool for running the planning tool with the MRS.
+    Args:
+        planets: (required) list of tuples with (separation, pa, flux (optional)) for each planet
+        target_name: (required) SIMBAD name of target
+        band: MRS band (1A-4C)
+        primary: which object should be placed at the centre of the FOV. Default is 0 for the star, 1 would be planet b,etc.
+        which: 2pt, 4pt or 8pt dither
+        sign: dither sign pos, neg, ext
+        :param ra: (optional) ra of target in HH:MM:SS format - if no SIMBAD name
+        :param dec: (optional) dec of target in HH:MM:SS format - if no SIMBAD name
+        :param start_time: (optional) start date of period of interest in YYYY-MM-DDTHH:MM:SS format eg. 2024-06-01T00:00:00
+        :param end_time: (optional) end date of period of interest in YYYY-MM-DDTHH:MM:SS format eg. 2024-06-01T00:00:00
+    :   param jwst_cycle: JWST cycle number eg. 4 for Cycle 4
+        webbpsf_plot: whether to plot webbpsf simulation of scene
+        vscale_im: scale of raw image (in percent of peak flux of the primary target)
+        vscale_res: scale of residuals image (in percent of peak flux of the primary target)
+
+    Returns:
+
+    """
     # get system V3PA range in given time period of JWST cycle
     _, _, _, _, V3PA_range = get_v3PA_range(target_name=target_name, ra=ra, dec=dec, start=start_time, end=end_time,
                                             cycle=jwst_cycle)
