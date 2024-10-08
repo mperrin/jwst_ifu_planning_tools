@@ -15,10 +15,15 @@ and run
 ```commandline
 python setup.py install
 ```
+You may need to remove the `__init__.py` file from the top level miricoord directory.
+Be sure to also point to the webbpsf data by downloading them from https://webbpsf.readthedocs.io/en/stable/installation.html#installing-the-required-data-files and exporting the "WEBBPSF_PATH" environment variable.
+
 Then continue the jwst planning tools installation and run
 ```
 cd jwst_planning_tools/
 pip install -e .
 ```
-Be sure to also point to the webbpsf data by downloading them from https://webbpsf.readthedocs.io/en/stable/installation.html#installing-the-required-data-files
-and exporting the "WEBBPSF_PATH" environment variable.
+You may need to add `jwst_planning_tools` to your python path, and add this to your bashrc file:
+```
+export PYTHONPATH=/path/to/jwst_planning_tools/:$PYTHONPATH
+```
