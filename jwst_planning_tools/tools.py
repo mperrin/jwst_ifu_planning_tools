@@ -170,16 +170,17 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
     if webbpsf_plot:
         simfov = 2*fov_MRS[band[0]][0]
         miri = webbpsf.MIRI()
-        miri.image_mask = "MIRI-IFU_3"
-        miri.filter = "DSHORT"
+        miri.mode = "IFU"
+        miri.options['ifu_broadening'] = "empirical"
+        miri.include_si_wfe = False
         miri.band = band
+        wavelength = np.mean([miri._IFU_bands_cubepars[band][2], miri._IFU_bands_cubepars[band][3]])
         xoff = coordinates[0, 0]
         yoff = coordinates[0, 1]
         miri.options['source_offset_x'] = xoff
         miri.options['source_offset_y'] = yoff
         # produce PSF for each object given fluxes in Jy
-        starpsf = miri.calc_psf(monochromatic=miri.wavelength, outfile=None, add_distortion=False,
-                                fov_arcsec=simfov)
+        starpsf = miri.calc_psf(monochromatic=wavelength*1e-6, oversample=7, fov_arcsec=simfov, add_distortion=True)
         system = starpsf[3].data*contrasts[0]  # initialise system with star
         system += np.random.normal(0, 0.1 * system)
         # miri.options['source_offset_x'] = xoff + np.random.normal(0, 0.1*miri._IFU_pixelscale[f"Ch{band[0]}"][1])
@@ -194,8 +195,7 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
             miri.options['source_offset_x'] = xoff
             miri.options['source_offset_y'] = yoff
             print("Placing planet at ", coordinates[j+1, :])
-            planetpsf = miri.calc_psf(monochromatic=miri.wavelength, outfile=None, add_distortion=False,
-                                    fov_arcsec=simfov)
+            planetpsf = miri.calc_psf(monochromatic=wavelength*1e-6, oversample=7, fov_arcsec=simfov, add_distortion=True)
             system += planetpsf[3].data*contrasts[j+1]
 
 
@@ -247,7 +247,7 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
         ax[2].set_title(f"Residuals")
         ax[2].set_xlabel("MRS alpha [arcsec]")
 
-        fig.suptitle(f"V3 PA: {v3pa}, wavelength: {miri.wavelength:.1f}")
+        fig.suptitle(f"V3 PA: {v3pa}, wavelength: {wavelength:.1f}")
         plt.show()
     else:
         fig = plt.figure()
