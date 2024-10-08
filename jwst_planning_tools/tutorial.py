@@ -1,6 +1,6 @@
 from jwst_planning_tools.tools import mrs_planning_tool, simulate_geometry
 
-if __name__=="__main__":
+if __name__ == "__main__":
     # specify V3 PA on your own
     # simulate_geometry(planets=[(1.7, 72, 1e-4), (0.96, 344, 1e-4), (0.7, 243, 1e-4)], v3pa=80, band="1A", offset=(0., -0.),
     #                   which="4pt", sign="ext", system_name="HR8799-", primary=0, webbpsf_plot=True)
