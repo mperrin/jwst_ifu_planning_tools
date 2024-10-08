@@ -1,0 +1,47 @@
+[build-system]
+build-backend = 'mesonpy'
+requires = [
+    "meson-python>=0.12.1",
+    "ninja>=1.8.2",
+    "Cython>=0.29.35",
+    "pybind11>=2.10.4",
+    "numpy"
+]
+
+[project]
+name = "jwst_planning_tools"
+version = "0.0.2"
+description = "Toolkit for planning JWST/MIRI MRS observations"
+repository = "https://github.com/patapisp/jwst_planning_tools"
+documentation = "https://github.com/patapisp/jwst_planning_tools"
+authors = [
+    {name = "Polychronis Patapis", email = "chronispatapis@gmail.com"},
+]
+readme = "README.md"
+license = {file = "LICENSE"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+        "Intended Audience :: Science/Research",
+        "Topic :: Scientific/Engineering :: Astronomy",
+        "License :: OSI Approved :: MIT License",
+        "Natural Language :: English",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+    "jwst >= 1.12.5",
+    "astropy",
+    "spectres",
+    "matplotlib",
+    "jwst-gtvt",
+    "webbpsf",
+    "photutils",
+    "scipy"
+]
+
+[tool.flake8]
+max-line-length = 120
+
+#[tool.tox]  # TODO add when tox fully supports toml, for now setup is in setup.cfg
+#legacy_tox_ini = """"""
