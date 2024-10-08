@@ -11,3 +11,6 @@ def test_get_V3PA_from_target():
 
     assert np.isnan(V3PA_range).any()
 
+
+if __name__ == "__main__":
+    test_get_V3PA_from_target()
