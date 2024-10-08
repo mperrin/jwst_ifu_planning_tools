@@ -18,7 +18,7 @@ fov_MRS = {"1": (3.3,3.7), "2":(4.0 , 4.8), "3":(5.6, 6.2)}
 dither_off = {"neg": [(-1.078, 0.528), (0.98, -0.44), (1.078, -0.528), (-0.980, 0.44)],
               "pos": [(1.078, 0.528), (-0.98, -0.44), (-1.078, -0.528), (0.980, 0.44)],
               "ext":[(0.4*0.18, 0.4*0.18), (-0.4*0.18, 0.4*0.18), (0.4*0.18,-0.4*0.18), (-0.4*0.18,-0.4*0.18)],
-             "ext-all":[(-0.09740,0.46396), (0.18792, -0.51062), (0.18845, 0.46396), (-0.09800, -0.51062)]}
+              "ext-all":[(-0.09740,0.46396), (0.18792, -0.51062), (0.18845, 0.46396), (-0.09800, -0.51062)]}
 
 def pa_to_MRS_pa(pa, v3pa, band):
     """
@@ -312,8 +312,8 @@ def mrs_planning_tool(planets, target_name, band="1A", primary=0, which="4pt", s
         # Take input from the user
         try:
             v3_pa = float(input("Enter V3 PA (float): "))
-            offsetx = float(input("Enter offset x (tuple): "))
-            offsety = float(input("Enter offset y (tuple): "))
+            offsetx = float(input("Enter offset x (float): "))
+            offsety = float(input("Enter offset y (float): "))
         except ValueError:
             print("Invalid input. Please enter valid float values.")
             continue  # Loop again if input is invalid
