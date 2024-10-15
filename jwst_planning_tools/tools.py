@@ -82,7 +82,7 @@ def create_dithered_scene(planet_angles, planet_sep, v3_pa, planet_names, dither
     for i, r in enumerate(planet_sep):
         v3PA = np.linspace(v3_pa[0], v3_pa[1], endpoint=True)
         MRSPAS = pa_to_MRS_pa(pa=planet_angles[i], v3pa=v3PA, band=band)
-        beta, alpha = planet_sep[i] * np.cos(-MRSPAS * np.pi / 180), planet_sep[i] * np.sin(-MRSPAS * np.pi / 180)
+        beta, alpha = planet_sep[i] * np.cos(MRSPAS * np.pi / 180), planet_sep[i] * np.sin(MRSPAS * np.pi / 180)
         ax.scatter(alpha, beta, label=planet_names[i])
 
         dither_pattern(ax=ax, center=[np.median(alpha), np.median(beta)], sign=dither_sign, which=which, ch=band[0])

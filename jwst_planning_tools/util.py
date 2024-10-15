@@ -49,10 +49,10 @@ def get_v3PA_range(target_name, ra=None, dec=None, start=None, end=None, cycle=4
         return None
 
     min_PA_data, max_PA_data = [], []
+    v3pa_range = []
     for starti, endi in window_indices:
         data_to_plot = df.loc[starti:endi]
-        min_PA_data.append(np.round(np.min(data_to_plot['V3PA_min_pa_angle']), 1))
-        max_PA_data.append(np.round(np.max(data_to_plot['V3PA_max_pa_angle']), 1))
-
-    v3pa_range = (min_PA_data, max_PA_data)
+        min_PA_data = np.round(np.min(data_to_plot['V3PA_min_pa_angle']), 1)
+        max_PA_data = np.round(np.max(data_to_plot['V3PA_max_pa_angle']), 1)
+        v3pa_range.append([min_PA_data, max_PA_data])
     return start, end, ra, dec, v3pa_range
