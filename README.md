@@ -28,4 +28,4 @@ You may need to add `jwst_planning_tools` to your python path, and add this to y
 export PYTHONPATH=/path/to/jwst_planning_tools/:$PYTHONPATH
 ```
 ## Example
-![HR8799]((https://github.com/patapisp/jwst_planning_tools/blob/main/_HR%208799_1A_V3_75.0_offsetXYidl_%5B%200.07%20-0.49%5D.png)
+![HR8799](https://github.com/patapisp/jwst_planning_tools/blob/main/_HR%208799_1A_V3_75.0_offsetXYidl_%5B%200.07%20-0.49%5D.png)
