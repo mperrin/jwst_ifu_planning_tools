@@ -1,5 +1,8 @@
-# jwst_planning_tools
-Convenience functions to plan JWST observations
+# jwst_ifu_planning_tools
+Convenience functions to plan JWST IFU observations, particularly MIRI MRS observations of circumstellar companions. 
+
+Code originally by Polychronis Patapis @patapisp. 
+
 
 ## Install 
 Clone the repository
