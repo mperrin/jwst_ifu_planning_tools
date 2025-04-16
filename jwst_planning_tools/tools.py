@@ -269,8 +269,8 @@ def simulate_geometry(planets, v3pa, offset=None, system_name=None, primary=None
         ax[0].set_aspect('equal')
         ax[0].legend()
         ax[0].set_title(f"Geometry")
-        ax[0].set_xlabel("MRS alpha [arcsec]")
-        ax[0].set_ylabel("MRS beta [arcsec]")
+        ax[0].set_xlabel(f"{instrument} x [arcsec]")
+        ax[0].set_ylabel(f"{instrument} y [arcsec]")
 
         ax[1].imshow(system, origin="lower", cmap="plasma", vmax=vscale_im,
                      extent=[-simfov / 2, simfov / 2, -simfov / 2, simfov / 2])
