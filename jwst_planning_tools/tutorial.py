@@ -1,4 +1,4 @@
-from jwst_planning_tools.tools import mrs_planning_tool, simulate_geometry
+from jwst_planning_tools.tools import ifu_planning_tool, simulate_geometry
 """
 Tutorial to run the mrs planning tool.
 
@@ -23,8 +23,9 @@ Parameters for mrs_planning_tool:
     jwst_cycle : int, when will the observation occur
 """
 if __name__ == "__main__":
-    mrs_planning_tool(planets=[(1.72, 72.8, 4e-4), (0.96, 345, 8e-4), (0.7, 244, 8e-4)], 
+    ifu_planning_tool(planets=[(1.72, 72.8, 4e-4), (0.96, 345, 8e-4), (0.7, 244, 8e-4)],
                       target_name="HR 8799",
+                      instrument='MRS',
                       band="2A",
                       primary=0, 
                       vscale_im=0.001,

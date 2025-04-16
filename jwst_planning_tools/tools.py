@@ -109,36 +109,73 @@ def pa_to_LRS_pa(pa, v3pa):
     north = -(v3pa + 4.8)
     return north + pa
 
+def pa_to_NIRSpec_pa(pa, v3pa):
+    """
+        Transforms the position angle on Sky to position angle on the LRS FoV
+        Args:
+            pa: PA in degrees with respect to North
+            v3pa: PA in degrees of JWST V3 axis during time of observation (V3PA)
+        Returns: PA in degrees with respect to LRS x, y coordinates
+
+        """
+    north = -(v3pa + 138.5)
+    return north + pa
+
 
 def v2v3_to_XidlYidl(v2, v3):
     return -v2, v3
 
 
-def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name=None, primary=None,
-                      webbpsf_plot=False, vscale_im=None, vscale_res=None):
+def simulate_geometry(planets, v3pa, offset=None, system_name=None, primary=None,
+                      webbpsf_plot=False, vscale_im=None, vscale_res=None, instrument="MRS", wavelength=None, **kwargs):
     """
+    Simulates the geometry of a planetary system for JWST instruments (MIRI/MRS or NIRSpec).
 
     :param planets: list of tuples with (separation, pa, flux (optional)) for each planet
-    :param v3pa:
-    :param band:
-    :param which:
-    :param sign:
-    :param offset:
-    :param system_name:
-    :param primary:
-    :param webbpsf:
-    :return:
+    :param v3pa: Position angle of JWST V3 axis during observation
+    :param which: Dither pattern or observing mode
+    :param sign: Dither sign
+    :param offset: Tuple (dx, dy) to apply as an offset to coordinates
+    :param system_name: Name of the planetary system
+    :param primary: Index of the primary object (e.g., host star)
+    :param webbpsf_plot: Whether to generate a PSF plot using webbpsf
+    :param vscale_im: Scaling for image visualization
+    :param vscale_res: Scaling for residual visualization
+    :param instrument: Instrument to simulate ("MRS" or "NIRSpec")
+    :param wavelength: Wavelength for PSF simulation (in microns)
+    :return: None
     """
-    nplanets = np.shape(planets)[0]
-    coordinates = np.zeros((nplanets+1, 2))
-    contrasts = np.ones(nplanets+1)
+    nplanets = len(planets)
+    coordinates = np.zeros((nplanets + 1, 2))
+    contrasts = np.ones(nplanets + 1)
+
+    # Instrument-specific parameters
+    if instrument == "MRS":
+        default_wavelength = 10.0  # Default wavelength in microns for MIRI
+    elif instrument == "NIRSpec":
+        default_wavelength = 4.0  # Default wavelength in microns for NIRSpec
+    else:
+        raise ValueError("Unsupported instrument. Choose 'MRS' or 'NIRSpec'.")
+
+    # Validate or use default wavelength
+    if wavelength is None:
+        wavelength = default_wavelength
+
     for i, p in enumerate(planets):
         separation, pa, contrast = p
-        mrspa = pa_to_MRS_pa(pa, v3pa, band)
-        beta, alpha = separation * np.cos(-mrspa * np.pi / 180), separation * np.sin(-mrspa * np.pi / 180)
-        coordinates[i+1, 0] = alpha
-        coordinates[i+1, 1] = beta
-        contrasts[i+1] = contrast
+        # Adjust position angle based on instrument
+        adjusted_pa = 0
+        if instrument == "MRS":
+            adjusted_pa = pa_to_MRS_pa(pa, v3pa, kwargs.get("band", "1A"))
+        elif instrument == "NIRSpec":
+            adjusted_pa = pa_to_NIRSpec_pa(pa, v3pa)
+        else:
+            raise ValueError(f"{instrument} not recognised.")
+
+        beta, alpha = separation * np.cos(np.radians(-adjusted_pa)), separation * np.sin(np.radians(-adjusted_pa))
+        coordinates[i + 1, 0] = alpha
+        coordinates[i + 1, 1] = beta
+        contrasts[i + 1] = contrast
 
     if primary is not None:
         try:
@@ -160,7 +197,7 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
     if system_name is None:
         system_name = "Tattoine"
 
-    names = [system_name+n for n in ["A", "b", "c", "d", "e"][:nplanets + 1]]
+    names = [system_name + n for n in ["A", "b", "c", "d", "e"][:nplanets + 1]]
 
     if vscale_im is None:
         vscale_im = 0.1
@@ -168,39 +205,49 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
         vscale_res = 0.1
 
     if webbpsf_plot:
-        simfov = 2*fov_MRS[band[0]][0]
-        miri = webbpsf.MIRI()
-        miri.mode = "IFU"
-        miri.options['ifu_broadening'] = "empirical"
-        miri.include_si_wfe = False
-        miri.band = band
-        wavelength = np.mean([miri._IFU_bands_cubepars[band][2], miri._IFU_bands_cubepars[band][3]])
+        import webbpsf
+        if instrument == "NIRSpec":
+            instrument_psf = webbpsf.NIRSpec()
+            instrument_psf.mode = "IFU"
+        elif instrument == "MRS":
+            instrument_psf = webbpsf.MIRI()
+            instrument_psf.options['ifu_broadening'] = "empirical"
+            instrument_psf.band = kwargs.get("band", "1A")
+            instrument_psf.mode = "IFU"
+            wavelength = np.mean([instrument_psf._IFU_bands_cubepars[instrument_psf.band][2],
+                                  instrument_psf._IFU_bands_cubepars[instrument_psf.band][3]])
+        else:
+            raise ValueError("Unsupported instrument for PSF simulation.")
+
+        # Set wavelength for PSF simulation
+        simfov = 3 if instrument == "NIRSpec" else 7
+        instrument_psf.include_si_wfe = False
+
         xoff = coordinates[0, 0]
         yoff = coordinates[0, 1]
-        miri.options['source_offset_x'] = xoff
-        miri.options['source_offset_y'] = yoff
+        instrument_psf.band.options['source_offset_x'] = xoff
+        instrument_psf.band.options['source_offset_y'] = yoff
         # produce PSF for each object given fluxes in Jy
-        starpsf = miri.calc_psf(monochromatic=wavelength*1e-6, oversample=7, fov_arcsec=simfov, add_distortion=True)
-        system = starpsf[3].data*contrasts[0]  # initialise system with star
+        starpsf = instrument_psf.calc_psf(monochromatic=wavelength * 1e-6, oversample=7, fov_arcsec=simfov, add_distortion=True)
+        system = starpsf[3].data * contrasts[0]  # initialise system with star
         system += np.random.normal(0, 0.1 * system)
         # miri.options['source_offset_x'] = xoff + np.random.normal(0, 0.1*miri._IFU_pixelscale[f"Ch{band[0]}"][1])
         # miri.options['source_offset_y'] = yoff + np.random.normal(0, 0.1*miri._IFU_pixelscale[f"Ch{band[0]}"][1])
         # produce PSF for each object given fluxes in Jy
         # refpsf = miri.calc_psf(monochromatic=miri.wavelength, outfile=None, add_distortion=False,
         #                         fov_arcsec=simfov)
-        print("Placing star at ", miri.options['source_offset_x'], miri.options['source_offset_y'])
+        print("Placing star at ", instrument_psf.options['source_offset_x'], instrument_psf.options['source_offset_y'])
         for j in range(nplanets):
-            xoff = coordinates[j+1, 0]
-            yoff = coordinates[j+1, 1]
-            miri.options['source_offset_x'] = xoff
-            miri.options['source_offset_y'] = yoff
-            print("Placing planet at ", coordinates[j+1, :])
-            planetpsf = miri.calc_psf(monochromatic=wavelength*1e-6, oversample=7, fov_arcsec=simfov, add_distortion=True)
-            system += planetpsf[3].data*contrasts[j+1]
+            xoff = coordinates[j + 1, 0]
+            yoff = coordinates[j + 1, 1]
+            instrument_psf.options['source_offset_x'] = xoff
+            instrument_psf.options['source_offset_y'] = yoff
+            print("Placing planet at ", coordinates[j + 1, :])
+            planetpsf = instrument_psf.calc_psf(monochromatic=wavelength * 1e-6, oversample=7, fov_arcsec=simfov,
+                                      add_distortion=True)
+            system += planetpsf[3].data * contrasts[j + 1]
 
-
-        refpsf = shift(starpsf[3].data*contrasts[0], shift=np.random.normal(0, 0.01, size=2))
-
+        refpsf = shift(starpsf[3].data * contrasts[0], shift=np.random.normal(0, 0.01, size=2))
 
         fig, ax = plt.subplots(1, 3, figsize=(12, 4), sharey=True, squeeze=True)
 
@@ -214,38 +261,42 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
         # plt.gca().arrow(2.3, -0.5, eastx, easty, head_width=0.1, head_length=0.1, fc='k', ec='k')
         # plt.text(1.6, -0.1, "N")
         # plt.text(2, -1, "E")
-        dither_pattern(ax[0], [0., 0.], sign=sign, ch=band[0], which=which)
-        ax[0].set_xlim([-simfov/2, simfov/2])
-        ax[0].set_ylim([-simfov/2, simfov/2])
+        if instrument == "MRS":
+            dither_pattern(ax[0], [0., 0.], sign=kwargs.get("sign", "pos"), ch=kwargs.get("band", "1A")[0],
+                           which=kwargs.get("which", "4pt"), color="black")
+        ax[0].set_xlim([-simfov / 2, simfov / 2])
+        ax[0].set_ylim([-simfov / 2, simfov / 2])
         ax[0].set_aspect('equal')
         ax[0].legend()
         ax[0].set_title(f"Geometry")
-        ax[0].set_xlabel("MRS alpha [arcsec]")
-        ax[0].set_ylabel("MRS beta [arcsec]")
-
+        ax[0].set_xlabel(f"{instrument} x [arcsec]")
+        ax[0].set_ylabel(f"{instrument} y [arcsec]")
 
         ax[1].imshow(system, origin="lower", cmap="plasma", vmax=vscale_im,
-                   extent=[-simfov/2, simfov/2, -simfov/2, simfov/2])
+                     extent=[-simfov / 2, simfov / 2, -simfov / 2, simfov / 2])
         for i in np.arange(1, nplanets + 1):
             ap = CircularAperture((coordinates[i, 0], coordinates[i, 1]), r=0.3)
             ap.plot(ax[1], color="red")
             # ax[0].scatter(coordinates[i, 0], coordinates[i, 1], marker="o", color=f"re", label=names[i])
-        dither_pattern(ax[1], [0., 0.], sign=sign, ch=band[0], which=which, color="white")
+        if instrument == "MRS":
+            dither_pattern(ax[1], [0., 0.], sign=kwargs.get("sign", "pos"), ch=kwargs.get("band", "1A")[0],
+                           which=kwargs.get("which", "4pt"), color="white")
         ax[1].set_aspect('equal')
         ax[1].set_title(f"Science")
-        ax[1].set_xlabel("MRS alpha [arcsec]")
-
+        ax[1].set_xlabel(f"{instrument} x [arcsec]")
 
         ax[2].imshow(system - refpsf, origin="lower",
-                   cmap="RdBu_r", vmin=-vscale_res, vmax=vscale_res,
-                   extent=[-simfov / 2, simfov / 2, -simfov / 2, simfov / 2])
+                     cmap="RdBu_r", vmin=-vscale_res, vmax=vscale_res,
+                     extent=[-simfov / 2, simfov / 2, -simfov / 2, simfov / 2])
         for i in np.arange(1, nplanets + 1):
             ap = CircularAperture((coordinates[i, 0], coordinates[i, 1]), r=0.3)
             ap.plot(ax[2], color="red")
-        dither_pattern(ax[2], [0., 0.], sign=sign, ch=band[0], which=which, color="black")
+        if instrument == "MRS":
+            dither_pattern(ax[2], [0., 0.], sign=kwargs.get("sign", "pos"), ch=kwargs.get("band", "1A")[0],
+                           which=kwargs.get("which", "4pt"), color="black")
         ax[2].set_aspect('equal')
         ax[2].set_title(f"Residuals")
-        ax[2].set_xlabel("MRS alpha [arcsec]")
+        ax[2].set_xlabel(f"{instrument} x [arcsec]")
 
         fig.suptitle(f"V3 PA: {v3pa}, wavelength: {wavelength:.1f}")
         plt.show()
@@ -261,21 +312,23 @@ def simulate_geometry(planets, v3pa, band, which, sign, offset=None, system_name
         # plt.gca().arrow(2.3, -0.5, eastx, easty, head_width=0.1, head_length=0.1, fc='k', ec='k')
         # plt.text(1.6, -0.1, "N")
         # plt.text(2, -1, "E")
-        dither_pattern(plt.gca(), [0., 0.], sign=sign, ch=band[0], which=which)
+        if instrument == "MRS":
+            dither_pattern(plt.gca(), [0., 0.], sign=kwargs.get("sign", "pos"), ch=kwargs.get("band", "1A")[0],
+                           which=kwargs.get("which", "4pt"))
 
         # plt.xlim([-3, 4])
         # plt.ylim([-2, 6])
         plt.legend()
         plt.suptitle(f"V3 PA: {v3pa}")
-        plt.xlabel("MRS alpha [arcsec]")
-        plt.ylabel("MRS beta [arcsec]")
+        plt.xlabel(f"{instrument} x [arcsec]")
+        plt.ylabel(f"{instrument} y [arcsec]")
         plt.show()
     return fig
 
 
-def mrs_planning_tool(planets, target_name, band="1A", primary=0, which="4pt", sign="pos",
+def ifu_planning_tool(planets, target_name, primary=0, instrument='MRS',
                       ra=None, dec=None, start_time=None, end_time=None, jwst_cycle=4, webbpsf_plot=True,
-                      vscale_im=None, vscale_res=None):
+                      vscale_im=None, vscale_res=None, **kwargs):
     """
     Command Line Tool for running the planning tool with the MRS.
     Args:
@@ -318,19 +371,24 @@ def mrs_planning_tool(planets, target_name, band="1A", primary=0, which="4pt", s
             print("Invalid input. Please enter valid float values.")
             continue  # Loop again if input is invalid
         offset = (offsetx, offsety)
-        v2off, v3off = mt.abtov2v3(-offsetx, -offsety, channel=band)
+        v2off, v3off = mt.abtov2v3(-offsetx, -offsety, channel="1A")
         offsetxyidl = np.round(mt.v2v3_to_xyideal(v2off, v3off), 2)
         # Perform actions with the inputs (e.g., calculate or process)
         print(f"You entered V3 PA: {v3_pa} and offset: {offset}")
         print("Simulating geometry")
-        fig = simulate_geometry(planets=planets, v3pa=v3_pa, band=band, offset=offset,
-                          which=which, sign=sign, system_name=target_name + "-", primary=primary,
-                          webbpsf_plot=webbpsf_plot, vscale_im=vscale_im, vscale_res=vscale_res)
+        fig = simulate_geometry(planets=planets, v3pa=v3_pa, offset=offset,
+                          system_name=target_name + "-", primary=primary,
+                          webbpsf_plot=webbpsf_plot, vscale_im=vscale_im, vscale_res=vscale_res, **kwargs)
         # Ask if the user wants to continue
         saveplot = input("Do you want to save the plot? (y/n): ").lower()
         if saveplot == 'y':
             savepath = input("provide path: ").lower()
-            fig.savefig(savepath+f"_{target_name}_{band}_V3_{v3_pa}_offsetXYidl_{offsetxyidl}.png", dpi=300)
+            if instrument == "MRS":
+                fig.savefig(savepath+f"_{target_name}_MRS{kwargs.get('band', '1A')}_V3_{v3_pa}_offsetXYidl_{offsetxyidl}.png", dpi=300)
+            else:
+                fig.savefig(
+                    savepath + f"_{target_name}_NIRSPec_V3_{v3_pa}_offsetXYidl_{offsetxyidl}.png",
+                    dpi=300)
         # Ask if the user wants to continue
         should_continue = input("Do you want to continue? (y/n): ").lower()
         if should_continue != 'y':
